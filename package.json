@@ -1,0 +1,19 @@
+{
+  "name": "fwlib-node",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "gypfile": true,
+  "scripts": {
+    "build": "node-gyp build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Sam Zagrobelny <strangesast@gmail.com>",
+  "license": "ISC",
+  "devDependencies": {
+    "node-gyp": "^7.1.2"
+  },
+  "dependencies": {
+    "bindings": "^1.5.0"
+  }
+}
