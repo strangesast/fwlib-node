@@ -18,7 +18,11 @@ class Fwlib {
   static napi_value GetConnected(napi_env env, napi_callback_info info);
   static napi_value Rdcncid(napi_env env, napi_callback_info info);
   static napi_value Sysinfo(napi_env env, napi_callback_info info);
+  static napi_value Rdaxisname(napi_env env, napi_callback_info info);
   static napi_value Rdaxisdata(napi_env env, napi_callback_info info);
+  static napi_value Exeprgname(napi_env env, napi_callback_info info);
+  static napi_value Exeprgname2(napi_env env, napi_callback_info info);
+  static napi_value Statinfo(napi_env env, napi_callback_info info);
   static inline napi_value Constructor(napi_env env);
 
   bool connected = false;

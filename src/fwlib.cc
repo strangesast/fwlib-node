@@ -31,11 +31,15 @@ napi_value Fwlib::Init(napi_env env, napi_value exports) {
       DECLARE_NAPI_METHOD("disconnect", Disconnect),
       DECLARE_NAPI_METHOD("rdcncid", Rdcncid),
       DECLARE_NAPI_METHOD("sysinfo", Sysinfo),
+      DECLARE_NAPI_METHOD("rdaxisname", Rdaxisname),
       DECLARE_NAPI_METHOD("rdaxisdata", Rdaxisdata),
+      DECLARE_NAPI_METHOD("exeprgname", Exeprgname),
+      DECLARE_NAPI_METHOD("exeprgname2", Exeprgname2),
+      DECLARE_NAPI_METHOD("statinfo", Statinfo),
   };
 
   napi_value cons;
-  status = napi_define_class(env, "Fwlib", NAPI_AUTO_LENGTH, New, nullptr, 6,
+  status = napi_define_class(env, "Fwlib", NAPI_AUTO_LENGTH, New, nullptr, 10,
                              properties, &cons);
   assert(status == napi_ok);
   napi_ref* constructor = new napi_ref;
@@ -348,6 +352,67 @@ typedef struct odbaxdt_t {
   int16_t reserve;
 } ODBAXDT_T;
 
+napi_value Fwlib::Rdaxisname(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  napi_value jsthis;
+  status = napi_get_cb_info(env, info, nullptr, nullptr, &jsthis, nullptr);
+  assert(status == napi_ok);
+
+  Fwlib* obj;
+  status = napi_unwrap(env, jsthis, reinterpret_cast<void**>(&obj));
+  assert(status == napi_ok);
+
+  short ret;
+  short axis_count = MAX_AXIS;
+  ODBAXISNAME axis_names[MAX_AXIS];
+  ret = cnc_rdaxisname(obj->libh, &axis_count, axis_names);
+
+  if (ret != EW_OK) {
+    const char* msg;
+    char code[8] = "";
+    switch (ret) {
+      case EW_LENGTH:
+        msg =
+            "Data block length error: The axis number (*data_num) is 0 or "
+            "less.";
+        break;
+      default:
+        msg = "An unknown error occurred.";
+    }
+    snprintf(code, 7, "%d", ret);
+    status = napi_throw_error(env, code, msg);
+    assert(status == napi_ok);
+    return nullptr;
+  }
+
+  napi_value result;
+  status = napi_create_array_with_length(env, axis_count, &result);
+  assert(status == napi_ok);
+
+  for (int i = 0; i < axis_count; i++) {
+    napi_value elem, val;
+    status = napi_create_object(env, &elem);
+    char str[2] = {0};
+    str[0] = axis_names[i].name;
+    status = napi_create_string_utf8(env, str, NAPI_AUTO_LENGTH, &val);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, elem, "name", val);
+    assert(status == napi_ok);
+
+    str[0] = axis_names[i].suff;
+    status = napi_create_string_utf8(env, str, NAPI_AUTO_LENGTH, &val);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, elem, "suff", val);
+    assert(status == napi_ok);
+
+    status = napi_set_element(env, result, i, elem);
+    assert(status == napi_ok);
+  }
+
+  return result;
+}
+
 napi_value Fwlib::Rdaxisdata(napi_env env, napi_callback_info info) {
   napi_status status;
 
@@ -408,7 +473,7 @@ napi_value Fwlib::Rdaxisdata(napi_env env, napi_callback_info info) {
   }
   short ret;
   short axis_num = MAX_AXIS;
-  ODBAXDT_T *axis_data = new ODBAXDT_T[MAX_AXIS * types_length];
+  ODBAXDT_T* axis_data = new ODBAXDT_T[MAX_AXIS * types_length];
   ODBAXDT* tmp1 = (ODBAXDT*)axis_data;
   ret = cnc_rdaxisdata(obj->libh, type, types, types_length, &axis_num, tmp1);
 
@@ -467,7 +532,8 @@ napi_value Fwlib::Rdaxisdata(napi_env env, napi_callback_info info) {
       status = napi_set_named_property(env, elem, "flag", val);
       assert(status == napi_ok);
 
-      status = napi_create_string_utf8(env, axis_data[ji].name, strlen(axis_data[ji].name), &val);
+      status = napi_create_string_utf8(env, axis_data[ji].name,
+                                       NAPI_AUTO_LENGTH, &val);
       assert(status == napi_ok);
       status = napi_set_named_property(env, elem, "name", val);
       assert(status == napi_ok);
@@ -482,11 +548,187 @@ napi_value Fwlib::Rdaxisdata(napi_env env, napi_callback_info info) {
       status = napi_set_named_property(env, elem, "unit", val);
       assert(status == napi_ok);
 
+      /*
+      status = napi_object_freeze(env, elem);
+      assert(status == napi_ok);
+      */
+
       status = napi_set_element(env, result, j * axis_num + i, elem);
       assert(status == napi_ok);
     }
   }
   delete[] axis_data;
+
+  return result;
+}
+
+typedef struct odbexeprg_t {
+  char name[36];
+  int32_t o_num;
+} ODBEXEPRG_T;
+
+napi_value Fwlib::Exeprgname(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  napi_value jsthis;
+  status = napi_get_cb_info(env, info, nullptr, nullptr, &jsthis, nullptr);
+  assert(status == napi_ok);
+
+  Fwlib* obj;
+  status = napi_unwrap(env, jsthis, reinterpret_cast<void**>(&obj));
+  assert(status == napi_ok);
+
+  short ret;
+  ODBEXEPRG_T exeprg;
+  ret = cnc_exeprgname(obj->libh, (ODBEXEPRG*)&exeprg);
+
+  if (ret != EW_OK) {
+    char code[8] = "";
+    const char* msg = "An unknown error occurred.";
+    snprintf(code, 7, "%d", ret);
+    status = napi_throw_error(env, code, msg);
+    assert(status == napi_ok);
+    return nullptr;
+  }
+
+  napi_value result;
+  status = napi_create_object(env, &result);
+  assert(status == napi_ok);
+
+  napi_value val;
+  status = napi_create_uint32(env, exeprg.o_num, &val);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "o_num", val);
+  assert(status == napi_ok);
+
+  status = napi_create_string_utf8(env, exeprg.name, NAPI_AUTO_LENGTH, &val);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "name", val);
+  assert(status == napi_ok);
+
+  return result;
+}
+
+napi_value Fwlib::Exeprgname2(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  napi_value jsthis;
+  status = napi_get_cb_info(env, info, nullptr, nullptr, &jsthis, nullptr);
+  assert(status == napi_ok);
+
+  Fwlib* obj;
+  status = napi_unwrap(env, jsthis, reinterpret_cast<void**>(&obj));
+  assert(status == napi_ok);
+
+  napi_value result;
+
+  short ret;
+  char path[256];
+  ret = cnc_exeprgname2(obj->libh, path);
+
+  if (ret != EW_OK) {
+    char code[8] = "";
+    const char* msg;
+    switch (ret) {
+      case EW_FUNC:
+        msg = "Not available.";
+        break;
+      default:
+        msg = "An unknown error occurred.";
+    }
+    snprintf(code, 7, "%d", ret);
+    status = napi_throw_error(env, code, msg);
+    assert(status == napi_ok);
+    return nullptr;
+  }
+
+  status = napi_create_string_utf8(env, path, NAPI_AUTO_LENGTH, &result);
+  assert(status == napi_ok);
+
+  return result;
+}
+
+napi_value Fwlib::Statinfo(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  napi_value jsthis;
+  status = napi_get_cb_info(env, info, nullptr, nullptr, &jsthis, nullptr);
+  assert(status == napi_ok);
+
+  Fwlib* obj;
+  status = napi_unwrap(env, jsthis, reinterpret_cast<void**>(&obj));
+  assert(status == napi_ok);
+
+  short ret;
+  ODBST s;
+  ret = cnc_statinfo(obj->libh, &s);
+
+  if (ret != EW_OK) {
+    char code[8] = "";
+    const char* msg;
+    switch (ret) {
+      case EW_FUNC:
+        msg = "Not available.";
+        break;
+      default:
+        msg = "An unknown error occurred.";
+    }
+    snprintf(code, 7, "%d", ret);
+    status = napi_throw_error(env, code, msg);
+    assert(status == napi_ok);
+    return nullptr;
+  }
+
+  napi_value result;
+  status = napi_create_object(env, &result);
+  assert(status == napi_ok);
+
+  napi_value num;
+
+  status = napi_create_int32(env, s.alarm, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "alarm", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, s.aut, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "aut", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, s.edit, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "edit", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, s.emergency, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "emergency", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, s.hdck, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "hdck", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, s.motion, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "motion", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, s.mstb, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "mstb", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, s.run, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "run", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, s.tmmode, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "tmmode", num);
+  assert(status == napi_ok);
 
   return result;
 }
