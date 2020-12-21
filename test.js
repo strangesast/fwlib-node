@@ -22,4 +22,8 @@ const exe_enum = ({run, motion, mstb}) =>
 const statinfo = obj.statinfo();
 console.log('status', statinfo, exe_enum(statinfo));
 
+console.log('rddynamic2', obj.rddynamic2());
+
+console.log('rdsvmeter', obj.rdsvmeter());
+
 obj.disconnect();

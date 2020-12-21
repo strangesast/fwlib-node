@@ -36,10 +36,12 @@ napi_value Fwlib::Init(napi_env env, napi_value exports) {
       DECLARE_NAPI_METHOD("exeprgname", Exeprgname),
       DECLARE_NAPI_METHOD("exeprgname2", Exeprgname2),
       DECLARE_NAPI_METHOD("statinfo", Statinfo),
+      DECLARE_NAPI_METHOD("rddynamic2", Rddynamic2),
+      DECLARE_NAPI_METHOD("rdsvmeter", Rdsvmeter),
   };
 
   napi_value cons;
-  status = napi_define_class(env, "Fwlib", NAPI_AUTO_LENGTH, New, nullptr, 10,
+  status = napi_define_class(env, "Fwlib", NAPI_AUTO_LENGTH, New, nullptr, 12,
                              properties, &cons);
   assert(status == napi_ok);
   napi_ref* constructor = new napi_ref;
@@ -730,6 +732,270 @@ napi_value Fwlib::Statinfo(napi_env env, napi_callback_info info) {
   status = napi_set_named_property(env, result, "tmmode", num);
   assert(status == napi_ok);
 
+  return result;
+}
+
+typedef struct odbdy2_t {
+    int16_t   dummy ;
+    int16_t   axis ;
+    int32_t   alarm ;
+    int32_t   prgnum ;
+    int32_t   prgmnum ;
+    int32_t   seqnum ;
+    int32_t   actf ;
+    int32_t   acts ;
+    union {
+        struct {
+            int32_t    absolute[MAX_AXIS] ;
+            int32_t    machine[MAX_AXIS] ;
+            int32_t    relative[MAX_AXIS] ;
+            int32_t    distance[MAX_AXIS] ;
+        } faxis ;
+        struct {
+            int32_t    absolute ;
+            int32_t    machine ;
+            int32_t    relative ;
+            int32_t    distance ;
+        } oaxis ;
+    } pos ;
+} ODBDY2_T ;
+
+
+napi_value Fwlib::Rddynamic2(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  napi_value jsthis;
+  status = napi_get_cb_info(env, info, nullptr, nullptr, &jsthis, nullptr);
+  assert(status == napi_ok);
+
+  Fwlib* obj;
+  status = napi_unwrap(env, jsthis, reinterpret_cast<void**>(&obj));
+  assert(status == napi_ok);
+
+  short ret;
+  ODBDY2_T dyn = {0};
+  ret = cnc_rddynamic2(obj->libh, ALL_AXES, sizeof(dyn), (ODBDY2 *)&dyn);
+
+  if (ret != EW_OK) {
+    char code[8] = "";
+    const char* msg;
+    switch (ret) {
+      case EW_LENGTH:
+        msg =  "data block length error: Size of ODBDY structure(length) is illegal.";
+        break;
+      case EW_ATTRIB:
+        msg = "data attribute error: The specification of axis number (axis) is improper.";
+        break;
+      default:
+        msg = "An unknown error occurred.";
+    }
+    snprintf(code, 7, "%d", ret);
+    status = napi_throw_error(env, code, msg);
+    assert(status == napi_ok);
+    return nullptr;
+  }
+
+  napi_value result;
+  status = napi_create_object(env, &result);
+  assert(status == napi_ok);
+
+  napi_value num;
+
+  status = napi_create_int32(env, dyn.actf, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "actf", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, dyn.acts, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "acts", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, dyn.alarm, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "alarm", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, dyn.axis, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "axis", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, dyn.dummy, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "dummy", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, dyn.prgnum, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "prgnum", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, dyn.prgmnum, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "prgmnum", num);
+  assert(status == napi_ok);
+
+  status = napi_create_int32(env, dyn.seqnum, &num);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "seqnum", num);
+  assert(status == napi_ok);
+
+  napi_value absolute;
+  status = napi_create_array_with_length(env, MAX_AXIS, &absolute);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "absolute", absolute);
+  assert(status == napi_ok);
+
+  napi_value machine;
+  status = napi_create_array_with_length(env, MAX_AXIS, &machine);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "machine", machine);
+  assert(status == napi_ok);
+
+  napi_value relative;
+  status = napi_create_array_with_length(env, MAX_AXIS, &relative);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "relative", relative);
+  assert(status == napi_ok);
+
+  napi_value distance;
+  status = napi_create_array_with_length(env, MAX_AXIS, &distance);
+  assert(status == napi_ok);
+  status = napi_set_named_property(env, result, "distance", distance);
+  assert(status == napi_ok);
+
+  for (int i = 0; i < MAX_AXIS; i++) {
+    int32_t v;
+    v = dyn.pos.faxis.absolute[i];
+    status = napi_create_int32(env, v, &num);
+    assert(status == napi_ok);
+    status = napi_set_element(env, absolute, i, num);
+    assert(status == napi_ok);
+
+    v = dyn.pos.faxis.machine[i];
+    status = napi_create_int32(env, v, &num);
+    assert(status == napi_ok);
+    status = napi_set_element(env, machine, i, num);
+    assert(status == napi_ok);
+
+    v = dyn.pos.faxis.relative[i];
+    status = napi_create_int32(env, v, &num);
+    assert(status == napi_ok);
+    status = napi_set_element(env, relative, i, num);
+    assert(status == napi_ok);
+
+    v = dyn.pos.faxis.distance[i];
+    status = napi_create_int32(env, v, &num);
+    assert(status == napi_ok);
+    status = napi_set_element(env, distance, i, num);
+    assert(status == napi_ok);
+  }
+
+  return result;
+}
+
+typedef struct odbsvload_t {
+  struct {
+      int32_t    data;
+      int16_t   dec;
+      int16_t   unit;
+      char    name;
+      char    suff1;
+      char    suff2;
+      char    reserve;
+  } svload ;
+} ODBSVLOAD_T;
+
+napi_value Fwlib::Rdsvmeter(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  napi_value jsthis;
+  status = napi_get_cb_info(env, info, nullptr, nullptr, &jsthis, nullptr);
+  assert(status == napi_ok);
+
+  Fwlib* obj;
+  status = napi_unwrap(env, jsthis, reinterpret_cast<void**>(&obj));
+  assert(status == napi_ok);
+
+  short ret;
+  short ax_num = MAX_AXIS;
+  ODBSVLOAD_T load[ax_num];
+  ret = cnc_rdsvmeter(obj->libh, &ax_num, (ODBSVLOAD*)load);
+
+  if (ret != EW_OK) {
+    char code[8] = "";
+    const char* msg;
+    switch (ret) {
+      case EW_LENGTH:
+        msg = "Data block length error: The axis number (*data_num) is 0 or less";
+        break;
+      default:
+        msg = "An unknown error occurred.";
+    }
+    snprintf(code, 7, "%d", ret);
+    status = napi_throw_error(env, code, msg);
+    assert(status == napi_ok);
+    return nullptr;
+  }
+
+  napi_value result, elem, num;
+  status = napi_create_array_with_length(env, ax_num, &result);
+  assert(status == napi_ok);
+
+  for (int i = 0; i < ax_num; i++) {
+    char s[2] = "";
+    status = napi_create_object(env, &elem);
+    assert(status == napi_ok);
+
+    status = napi_create_int32(env, load[i].svload.data, &num);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, elem, "data", num);
+    assert(status == napi_ok);
+
+    status = napi_create_int32(env, load[i].svload.dec, &num);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, elem, "dec", num);
+    assert(status == napi_ok);
+
+    // always zero (%)
+    status = napi_create_int32(env, load[i].svload.unit, &num);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, elem, "unit", num);
+    assert(status == napi_ok);
+
+    s[0] = load[i].svload.name;
+    status = napi_create_string_utf8(env, s, strlen(s), &num);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, elem, "name", num);
+    assert(status == napi_ok);
+
+    /* garbage?
+    s[0] = load[i].svload.reserve;
+    status = napi_create_string_utf8(env, s, strlen(s), &num);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, elem, "reserve", num);
+    assert(status == napi_ok);
+    */
+
+    s[0] = load[i].svload.suff1;
+    status = napi_create_string_utf8(env, s, strlen(s), &num);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, elem, "suff", num);
+    assert(status == napi_ok);
+
+    /* "not used"
+    s[0] = load[i].svload.suff2;
+    status = napi_create_string_utf8(env, s, strlen(s), &num);
+    assert(status == napi_ok);
+    status = napi_set_named_property(env, elem, "suff2", num);
+    assert(status == napi_ok);
+    */
+
+    status = napi_set_element(env, result, i, elem);
+    assert(status == napi_ok);
+
+  }
   return result;
 }
 
